@@ -49,9 +49,16 @@ dump_kuadrant_diagnostics() {
 # failed `oinc create` won't abort here - it falls through to the diagnostics
 # dump and an explicit exit instead of dying silently.
 log "creating oinc cluster with addons (kuadrant@${KUADRANT_VERSION})..."
+# NOTE: the `mcp-gateway` addon is intentionally NOT listed here. kuadrant-operator
+# (latest) now ships the MCP stack itself — it deploys the MCP CRDs
+# (mcpgatewayextensions/mcpserverregistrations/mcpvirtualservers) and the
+# mcp-gateway-controller as part of its KuadrantControlPlane reconcile. Re-adding the
+# standalone Helm addon double-applies the same CRDs and aborts `oinc create` with a
+# server-side-apply ownership conflict on `.spec.versions`. MCP functionality the
+# plugin depends on is fully provided by the operator.
 if ! oinc create \
 	--version "${OCP_VERSION}" \
-	--addons "gateway-api,cert-manager,metallb,istio,kuadrant@${KUADRANT_VERSION},mcp-gateway" \
+	--addons "gateway-api,cert-manager,metallb,istio,kuadrant@${KUADRANT_VERSION}" \
 	--metallb-address-pool auto \
 	--console-plugin "${PLUGIN_NAME}=http://${HOST}:${PLUGIN_PORT}"; then
 	dump_kuadrant_diagnostics

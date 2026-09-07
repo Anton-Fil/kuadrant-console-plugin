@@ -34,7 +34,19 @@ log "creating APIKey consumer fixtures (controller will create APIKeyRequests)..
 kubectl apply -f "${SCRIPT_DIR}/manifests/test-apikey-fixtures.yaml"
 
 log "waiting for controller to create all 9 APIKeyRequests in kuadrant-test..."
-timeout 90 bash -c 'until [ "$(kubectl get apikeyrequests -n kuadrant-test --no-headers 2>/dev/null | wc -l)" -ge 9 ]; do sleep 2; done' \
-  || { echo "ERROR: APIKeyRequests not all created after 90s (found $(kubectl get apikeyrequests -n kuadrant-test --no-headers 2>/dev/null | wc -l))"; exit 1; }
+# Portable wait loop (45 * 2s = 90s). Avoids GNU `timeout`, which isn't present on
+# macOS by default (it's coreutils' `gtimeout` there), so local dev on darwin works
+# without extra tooling.
+apikeyrequest_count() {
+  kubectl get apikeyrequests -n kuadrant-test --no-headers 2>/dev/null | wc -l | tr -d ' '
+}
+for _ in $(seq 1 45); do
+  [ "$(apikeyrequest_count)" -ge 9 ] && break
+  sleep 2
+done
+if [ "$(apikeyrequest_count)" -lt 9 ]; then
+  echo "ERROR: APIKeyRequests not all created after 90s (found $(apikeyrequest_count))"
+  exit 1
+fi
 
 log "e2e setup complete"
