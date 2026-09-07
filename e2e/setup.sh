@@ -34,21 +34,22 @@ log "creating APIKey consumer fixtures (controller will create APIKeyRequests)..
 kubectl apply -f "${SCRIPT_DIR}/manifests/test-apikey-fixtures.yaml"
 
 log "waiting for controller to create all 9 APIKeyRequests in kuadrant-test..."
-# Portable wait loop (45 * 2s = 90s). Avoids GNU `timeout`, which isn't present on
-# macOS by default (it's coreutils' `gtimeout` there), so local dev on darwin works
-# without extra tooling.
+# Portable wait loop with an explicit 90s wall-clock deadline. Avoids GNU `timeout`,
+# which isn't present on macOS by default (it's coreutils' `gtimeout` there), so local
+# dev on darwin works without extra tooling. The deadline is checked against elapsed
+# time (not iteration count) so a slow kubectl poll can't stretch the total wait.
 apikeyrequest_count() {
   # Bound each poll (--request-timeout) so a stalled API server can't hang a single
-  # kubectl call indefinitely and blow past the 90s budget.
+  # kubectl call indefinitely.
   kubectl get apikeyrequests -n kuadrant-test --request-timeout=10s --no-headers 2>/dev/null | wc -l | tr -d ' '
 }
-for _ in $(seq 1 45); do
-  [ "$(apikeyrequest_count)" -ge 9 ] && break
+deadline=$(( $(date +%s) + 90 ))
+while [ "$(apikeyrequest_count)" -lt 9 ]; do
+  if [ "$(date +%s)" -ge "${deadline}" ]; then
+    echo "ERROR: APIKeyRequests not all created after 90s (found $(apikeyrequest_count))"
+    exit 1
+  fi
   sleep 2
 done
-if [ "$(apikeyrequest_count)" -lt 9 ]; then
-  echo "ERROR: APIKeyRequests not all created after 90s (found $(apikeyrequest_count))"
-  exit 1
-fi
 
 log "e2e setup complete"
