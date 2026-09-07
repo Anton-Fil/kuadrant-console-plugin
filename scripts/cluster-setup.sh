@@ -49,16 +49,23 @@ dump_kuadrant_diagnostics() {
 # failed `oinc create` won't abort here - it falls through to the diagnostics
 # dump and an explicit exit instead of dying silently.
 log "creating oinc cluster with addons (kuadrant@${KUADRANT_VERSION})..."
-# NOTE: the `mcp-gateway` addon is intentionally NOT listed here. kuadrant-operator
+# NOTE: the `mcp-gateway` addon is intentionally NOT in the default list. kuadrant-operator
 # (latest) now ships the MCP stack itself — it deploys the MCP CRDs
 # (mcpgatewayextensions/mcpserverregistrations/mcpvirtualservers) and the
 # mcp-gateway-controller as part of its KuadrantControlPlane reconcile. Re-adding the
 # standalone Helm addon double-applies the same CRDs and aborts `oinc create` with a
 # server-side-apply ownership conflict on `.spec.versions`. MCP functionality the
 # plugin depends on is fully provided by the operator.
+#
+# If you pin an older, pre-MCP operator (e.g. KUADRANT_VERSION=1.4.4), that operator
+# does NOT provide the MCP CRDs, so setup would fail applying MCPGatewayExtension /
+# MCPServerRegistration. In that case set MCP_GATEWAY_ADDON=mcp-gateway to install the
+# standalone chart (no conflict there, since the old operator doesn't own the CRDs).
+ADDONS="gateway-api,cert-manager,metallb,istio,kuadrant@${KUADRANT_VERSION}"
+[ -n "${MCP_GATEWAY_ADDON:-}" ] && ADDONS="${ADDONS},${MCP_GATEWAY_ADDON}"
 if ! oinc create \
 	--version "${OCP_VERSION}" \
-	--addons "gateway-api,cert-manager,metallb,istio,kuadrant@${KUADRANT_VERSION}" \
+	--addons "${ADDONS}" \
 	--metallb-address-pool auto \
 	--console-plugin "${PLUGIN_NAME}=http://${HOST}:${PLUGIN_PORT}"; then
 	dump_kuadrant_diagnostics
