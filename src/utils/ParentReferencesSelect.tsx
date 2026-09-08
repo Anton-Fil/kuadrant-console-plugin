@@ -133,8 +133,12 @@ const ParentReferencesSelect: React.FC<ParentReferencesSelectProps> = ({
   // Gated on the explicit reconcileParentRefs flag so the standalone Create/Edit
   // HTTPRoute page is untouched, and so reconciliation still runs even when the
   // wizard has removed its last draft Gateway (draft list empty).
+  // Skipped while gatewayError is present: on a transient API/watch failure the
+  // merged list collapses to just the draft Gateways (or empty), and reconciling
+  // against it would wrongly clear the user's existing selection. Preserve it until
+  // the watch recovers.
   React.useEffect(() => {
-    if (!reconcileParentRefs || !gatewayLoaded) return;
+    if (!reconcileParentRefs || !gatewayLoaded || gatewayError) return;
     let changed = false;
     const reconciled = parentRefs.map((ref) => {
       if (!ref.gatewayName) return ref;
@@ -162,7 +166,7 @@ const ParentReferencesSelect: React.FC<ParentReferencesSelectProps> = ({
       return ref;
     });
     if (changed) onChange(reconciled);
-  }, [availableGateways, gatewayLoaded, reconcileParentRefs, parentRefs, onChange]);
+  }, [availableGateways, gatewayLoaded, gatewayError, reconcileParentRefs, parentRefs, onChange]);
 
   // Gateway validation function
   const validateGateway = (gateway: GatewayForSelect): string | null => {
@@ -279,6 +283,34 @@ const ParentReferencesSelect: React.FC<ParentReferencesSelectProps> = ({
     onChange(updatedRefs);
   };
 
+  // Select a Gateway by its composite `namespace/name` key. Gateway names are not
+  // unique across namespaces (a draft Gateway from an earlier wizard step can share a
+  // name with a live Gateway elsewhere), so the option value carries both fields and
+  // both are resolved together — resolving by name alone could write the wrong
+  // namespace into the parentRef.
+  const updateParentGateway = (id: string, gatewayKey: string) => {
+    const selectedGateway = gatewayKey
+      ? availableGateways.find(
+          (gw) => `${gw.metadata?.namespace}/${gw.metadata?.name}` === gatewayKey,
+        )
+      : undefined;
+    const updatedRefs = parentRefs.map((ref) => {
+      if (ref.id !== id) return ref;
+      // Empty selection or an unresolved key → clear the whole selection.
+      if (!selectedGateway) {
+        return { ...ref, gatewayName: '', gatewayNamespace: '', sectionName: '', port: 0 };
+      }
+      return {
+        ...ref,
+        gatewayName: selectedGateway.metadata.name,
+        gatewayNamespace: selectedGateway.metadata.namespace,
+        sectionName: '',
+        port: 80,
+      };
+    });
+    onChange(updatedRefs);
+  };
+
   // Update parent reference
   const updateParentReference = (
     id: string,
@@ -288,16 +320,6 @@ const ParentReferencesSelect: React.FC<ParentReferencesSelectProps> = ({
     const updatedRefs = parentRefs.map((ref) => {
       if (ref.id === id) {
         const updatedRef = { ...ref, [field]: value };
-
-        // If Gateway is changed, automatically update namespace and reset section
-        if (field === 'gatewayName') {
-          const selectedGateway = availableGateways.find((gw) => gw.metadata.name === value);
-          if (selectedGateway) {
-            updatedRef.gatewayNamespace = selectedGateway.metadata.namespace;
-            updatedRef.sectionName = '';
-            updatedRef.port = 80;
-          }
-        }
 
         // If Section is changed, update port
         if (field === 'sectionName') {
@@ -393,21 +415,24 @@ const ParentReferencesSelect: React.FC<ParentReferencesSelectProps> = ({
                 <FormGroup label={t('Gateway name')} isRequired fieldId={`parent-gateway-${index}`}>
                   <FormSelect
                     id={`parent-gateway-${index}`}
-                    value={parentRef.gatewayName}
-                    onChange={(_, value) =>
-                      updateParentReference(parentRef.id, 'gatewayName', value)
+                    value={
+                      parentRef.gatewayName
+                        ? `${parentRef.gatewayNamespace}/${parentRef.gatewayName}`
+                        : ''
                     }
+                    onChange={(_, value) => updateParentGateway(parentRef.id, value)}
                     aria-label={t('Select Gateway')}
                     isDisabled={isDisabled}
                   >
                     <FormSelectOption key="empty" value="" label={t('Select Gateway')} />
                     {getSortedGateways().map((gateway) => {
                       const restriction = validateGateway(gateway);
+                      const gatewayKey = `${gateway.metadata.namespace}/${gateway.metadata.name}`;
 
                       return (
                         <FormSelectOption
-                          key={`${gateway.metadata.name}-${gateway.metadata.namespace}`}
-                          value={gateway.metadata.name}
+                          key={gatewayKey}
+                          value={gatewayKey}
                           label={
                             restriction
                               ? `${gateway.metadata.name} (${gateway.metadata.namespace}) — ${restriction}`
