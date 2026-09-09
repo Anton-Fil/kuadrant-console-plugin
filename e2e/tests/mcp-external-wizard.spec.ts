@@ -268,7 +268,9 @@ test.describe('MCP External Registration Wizard', () => {
         await wizard.locator('#external-route-mode-new').check();
         await wizard.locator('#httproute-name').fill(routeName);
         await wizard.getByRole('button', { name: 'Add parent reference' }).click();
-        await wizard.locator('#parent-gateway-0').selectOption('test-gateway');
+        // Gateway options are keyed by a `namespace/name` composite (names aren't
+        // unique across namespaces); test-gateway lives in kuadrant-test.
+        await wizard.locator('#parent-gateway-0').selectOption(`${TEST_NAMESPACE}/test-gateway`);
         await wizard.locator('#parent-section-0').selectOption('http');
         await wizard.getByRole('button', { name: 'Add rule' }).click();
 

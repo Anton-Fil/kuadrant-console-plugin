@@ -5,7 +5,7 @@ import { ResourceYAMLEditor } from '@openshift-console/dynamic-plugin-sdk';
 import * as yaml from 'js-yaml';
 import { MCPServerFormState } from '../types';
 import MCPServerRegistrationFormFields from '../MCPServerRegistrationFormFields';
-import { buildMCPServerRegistration, isMCPServerRegistrationValid } from '../mcpResourceUtils';
+import { buildMCPServerRegistration } from '../mcpResourceUtils';
 
 interface RegisterServerStepProps {
   formState: MCPServerFormState;
@@ -30,20 +30,27 @@ const RegisterServerStep: React.FC<RegisterServerStepProps> = ({
   const [activeTab, setActiveTab] = React.useState<'form' | 'yaml'>('form');
   const [yamlKey, setYamlKey] = React.useState(0);
 
+  // Sync wizard-owned references (the route chosen in an earlier step, the namespace
+  // from the credential step) into the form. `formState` stays in the dependency array
+  // so the merge always builds on the LATEST state: an earlier version closed over a
+  // stale `formState`, so when `routeName` settled a tick after the user had already
+  // typed a name/prefix (it derives from httpRouteResource, which updates async), the
+  // effect re-fired and clobbered those fields back to empty — leaving "Save and
+  // continue" disabled (the flaky failure). The equality guard makes the effect a
+  // no-op once the references are in sync, so keeping `formState` in deps can't loop.
+  // Validity is owned solely by MCPServerRegistrationFormFields' onValidationChange;
+  // a single source removes the effect-ordering race between two callers of it.
   React.useEffect(() => {
-    if (
-      (routeName && formState.targetHTTPRouteName !== routeName) ||
-      (credentialNamespace && formState.namespace !== credentialNamespace)
-    ) {
-      const nextState = {
+    const needsRoute = !!routeName && formState.targetHTTPRouteName !== routeName;
+    const needsNamespace = !!credentialNamespace && formState.namespace !== credentialNamespace;
+    if (needsRoute || needsNamespace) {
+      onChange({
         ...formState,
         ...(routeName ? { targetHTTPRouteName: routeName } : {}),
         ...(credentialNamespace ? { namespace: credentialNamespace } : {}),
-      };
-      onChange(nextState);
-      onValidationChange?.(isMCPServerRegistrationValid(nextState));
+      });
     }
-  }, [routeName, credentialNamespace]); // eslint-disable-line -- only resync wizard-owned references
+  }, [routeName, credentialNamespace, formState, onChange]);
 
   // Rebuilt from form state on every change so the YAML view is always current.
   const serverResource = React.useMemo(
