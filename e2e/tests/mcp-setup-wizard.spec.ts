@@ -667,11 +667,14 @@ spec:
         await page.getByRole('button', { name: 'Add parent reference' }).click();
 
         // The draft Gateway (absent from the cluster) must appear and be enabled — the #795 fix.
-        const draftOption = page.locator(`#parent-gateway-0 option[value="${gwName}"]`);
+        // Options are keyed by a `namespace/name` composite (names aren't unique across
+        // namespaces), so match on the unique draft name suffix and read the exact value.
+        const draftOption = page.locator(`#parent-gateway-0 option[value$="/${gwName}"]`);
         await expect(draftOption).toBeAttached({ timeout: 15_000 });
         await expect(draftOption).not.toBeDisabled();
-        await page.locator('#parent-gateway-0').selectOption(gwName);
-        await expect(page.locator('#parent-gateway-0')).toHaveValue(gwName);
+        const gwValue = await draftOption.getAttribute('value');
+        await page.locator('#parent-gateway-0').selectOption(gwValue);
+        await expect(page.locator('#parent-gateway-0')).toHaveValue(gwValue);
 
         // Its listener is selectable too, confirming the draft's spec flows through.
         const sectionOption = page.locator('#parent-section-0 option[value="mcp"]');
@@ -751,9 +754,12 @@ spec:
         await page.locator('#httproute-name').fill(routeName);
 
         await page.getByRole('button', { name: 'Add parent reference' }).click();
-        const draftOption = page.locator(`#parent-gateway-0 option[value="${gwName}"]`);
+        // Options are keyed by a `namespace/name` composite; match the unique draft
+        // name suffix and read the exact value for selection/assertions.
+        const draftOption = page.locator(`#parent-gateway-0 option[value$="/${gwName}"]`);
         await expect(draftOption).toBeAttached({ timeout: 15_000 });
-        await page.locator('#parent-gateway-0').selectOption(gwName);
+        const gwValue = await draftOption.getAttribute('value');
+        await page.locator('#parent-gateway-0').selectOption(gwValue);
         const sectionOption = page.locator('#parent-section-0 option[value="mcp"]');
         await expect(sectionOption).toBeAttached({ timeout: 15_000 });
         await page.locator('#parent-section-0').selectOption('mcp');
@@ -766,7 +772,7 @@ spec:
         // Draft form state — including the nested parentRef selection — must survive.
         await expect(page.getByLabel('Create a new HTTPRoute')).toBeChecked({ timeout: 15_000 });
         await expect(page.locator('#httproute-name')).toHaveValue(routeName);
-        await expect(page.locator('#parent-gateway-0')).toHaveValue(gwName);
+        await expect(page.locator('#parent-gateway-0')).toHaveValue(gwValue);
         await expect(page.locator('#parent-section-0')).toHaveValue('mcp');
       },
     );

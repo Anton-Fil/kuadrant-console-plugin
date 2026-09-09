@@ -71,17 +71,17 @@ async function expectEditorContains(page: Page, text: string): Promise<void> {
 async function setupCreateRouteWithParent(
   page: Page,
   routeName: string,
-  gateway: string,
+  gatewayValue: string,
 ): Promise<void> {
   await page.locator('#httproute-name').fill(routeName);
 
   // Add parent reference
   await page.getByRole('button', { name: 'Add parent reference' }).click();
 
-  const gatewayOption = page.locator(`#parent-gateway-0 option[value="${gateway}"]`);
+  const gatewayOption = page.locator(`#parent-gateway-0 option[value="${gatewayValue}"]`);
   await expect(gatewayOption).toBeAttached({ timeout: 15_000 });
   await expect(gatewayOption).not.toBeDisabled({ timeout: 15_000 });
-  await page.locator('#parent-gateway-0').selectOption(gateway);
+  await page.locator('#parent-gateway-0').selectOption(gatewayValue);
 
   const sectionOption = page.locator('#parent-section-0 option[value="http"]');
   await expect(sectionOption).toBeAttached({ timeout: 15_000 });
@@ -131,6 +131,10 @@ test.describe('HTTPRoute CRUD', () => {
   let namespace = '';
   const gateway = 'kuadrant-ingressgateway';
   const gatewayNamespace = 'gateway-system';
+  // The Gateway <select> keys options by a `namespace/name` composite (names are not
+  // unique across namespaces), so UI selection/assertions use this value while the
+  // persisted parentRef still stores the bare name + namespace separately.
+  const gatewayValue = `${gatewayNamespace}/${gateway}`;
 
   test.beforeEach(async () => {
     namespace = `e2e-route-${uid()}`;
@@ -158,10 +162,10 @@ test.describe('HTTPRoute CRUD', () => {
     // Add parent reference
     await page.getByRole('button', { name: 'Add parent reference' }).click();
 
-    const gatewayOption = page.locator(`#parent-gateway-0 option[value="${gateway}"]`);
+    const gatewayOption = page.locator(`#parent-gateway-0 option[value="${gatewayValue}"]`);
     await expect(gatewayOption).toBeAttached({ timeout: 15_000 });
     await expect(gatewayOption).not.toBeDisabled({ timeout: 15_000 });
-    await page.locator('#parent-gateway-0').selectOption(gateway);
+    await page.locator('#parent-gateway-0').selectOption(gatewayValue);
 
     const sectionOption = page.locator('#parent-section-0 option[value="http"]');
     await expect(sectionOption).toBeAttached({ timeout: 15_000 });
@@ -246,7 +250,7 @@ spec:
     await expect(nameInput).toHaveValue(routeName, { timeout: 15_000 });
     await expect(nameInput).toBeDisabled();
 
-    await expect(page.locator('#parent-gateway-0')).toHaveValue(gateway);
+    await expect(page.locator('#parent-gateway-0')).toHaveValue(gatewayValue);
     await expect(page.locator('#parent-section-0')).toHaveValue('http');
 
     // Verify rule is shown in the table
@@ -306,10 +310,10 @@ spec:
     // Add parent reference
     await page.getByRole('button', { name: 'Add parent reference' }).click();
 
-    const gatewayOption = page.locator(`#parent-gateway-0 option[value="${gateway}"]`);
+    const gatewayOption = page.locator(`#parent-gateway-0 option[value="${gatewayValue}"]`);
     await expect(gatewayOption).toBeAttached({ timeout: 15_000 });
     await expect(gatewayOption).not.toBeDisabled({ timeout: 15_000 });
-    await page.locator('#parent-gateway-0').selectOption(gateway);
+    await page.locator('#parent-gateway-0').selectOption(gatewayValue);
 
     const sectionOption = page.locator('#parent-section-0 option[value="http"]');
     await expect(sectionOption).toBeAttached({ timeout: 15_000 });
@@ -333,7 +337,7 @@ spec:
     await page.getByRole('tab', { name: 'Form' }).click();
 
     await expect(page.locator('#httproute-name')).toHaveValue(routeName);
-    await expect(page.locator('#parent-gateway-0')).toHaveValue(gateway);
+    await expect(page.locator('#parent-gateway-0')).toHaveValue(gatewayValue);
     // Rule data is shown in the table, not as inputs
     await expect(page.getByText('/test')).toBeVisible();
   });
@@ -346,7 +350,7 @@ spec:
       timeout: 15_000,
     });
 
-    await setupCreateRouteWithParent(page, routeName, gateway);
+    await setupCreateRouteWithParent(page, routeName, gatewayValue);
 
     // Open rule wizard to check method dropdown
     await page.getByRole('button', { name: 'Add rule' }).click();
@@ -414,7 +418,7 @@ spec:
       timeout: 15_000,
     });
 
-    await setupCreateRouteWithParent(page, routeName, gateway);
+    await setupCreateRouteWithParent(page, routeName, gatewayValue);
 
     // Open rule wizard
     await page.getByRole('button', { name: 'Add rule' }).click();
@@ -587,7 +591,7 @@ spec:
         timeout: 15_000,
       });
 
-      await setupCreateRouteWithParent(page, routeName, gateway);
+      await setupCreateRouteWithParent(page, routeName, gatewayValue);
 
       // Open rule wizard
       await page.getByRole('button', { name: 'Add rule' }).click();
