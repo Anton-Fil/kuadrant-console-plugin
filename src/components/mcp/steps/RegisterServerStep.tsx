@@ -42,8 +42,7 @@ const RegisterServerStep: React.FC<RegisterServerStepProps> = ({
   // a single source removes the effect-ordering race between two callers of it.
   React.useEffect(() => {
     const needsRoute = !!routeName && formState.targetHTTPRouteName !== routeName;
-    const needsNamespace =
-      !!credentialNamespace && formState.namespace !== credentialNamespace;
+    const needsNamespace = !!credentialNamespace && formState.namespace !== credentialNamespace;
     if (needsRoute || needsNamespace) {
       onChange({
         ...formState,
